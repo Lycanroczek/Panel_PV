@@ -1,3 +1,4 @@
+import machine
 from machine import ADC
 expansion = ADC(0)
 def jest_podlcaczona():
