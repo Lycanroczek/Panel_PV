@@ -13,7 +13,7 @@ def temp_start():
 
 def reading_temp():
 
-    read = temp.readfrom(73,2) #Requesting 2 binary 
+    read = temp.readfrom(73,2) #Requesting data from sensor
     value = read[0] 
     value = value << 8
     value = value + read[1]
