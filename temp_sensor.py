@@ -12,10 +12,20 @@ def temp_start():
     temp.writeto(73,bytes([0])) #Coming back to reading temperature
 
 def reading_temp():
-    read = temp.readfrom(73,2)
-    value = read[0] + read[1]
+
+    read = temp.readfrom(73,2) #Requesting 2 binary 
+    value = read[0] 
+    value = value << 8
+    value = value + read[1]
     value = value >> 4
-    value = value * 0.0625
-    return value
+    value_2 = value & 2048
+    if value_2 == 0: #Positive temperature
+        value = value * 0.0625
+        return value
+    else: #Negative temperature
+        value = value - 4096
+        value = value * 0.0625
+        return value
+        
 
 
