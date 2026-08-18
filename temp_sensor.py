@@ -1,5 +1,4 @@
 import machine
-import time
 from machine import time, Pin, I2C
 
 def temp_start():
@@ -27,9 +26,9 @@ def reading_temp():
         return value
         
 def alert_temp():
-    alert = Pin(9, Pin.IN)
-    alert = alert.value()
-    if alert == 1:
-        return 1
+    alert = Pin(9, Pin.IN) #Reading alert pin from sensor
+    alert = alert.value() 
+    if alert == 1: 
+        return 1 #Alert is active
     else:
-        return 0
+        return 0 #Alert is not active
