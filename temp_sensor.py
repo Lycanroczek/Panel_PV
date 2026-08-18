@@ -1,5 +1,5 @@
-import time
 import machine
+import time
 from machine import time, Pin, I2C
 
 def temp_start():
@@ -8,11 +8,10 @@ def temp_start():
     temp.scan()
     temp.writeto_mem(73,1,bytes([100,176])) #Configurating temperature sensor work after restart
     temp.writeto_mem(73,3,bytes([6,64])) #Configurating THIGH 100C
-    temp.writeto_mem(73,2,bytes([5,160])) #Configuratin TLOW 90C
+    temp.writeto_mem(73,2,bytes([5,160])) #Configurating TLOW 90C
     temp.writeto(73,bytes([0])) #Coming back to reading temperature
 
 def reading_temp():
-
     read = temp.readfrom(73,2) #Requesting data from sensor
     value = read[0] 
     value = value << 8
@@ -27,5 +26,10 @@ def reading_temp():
         value = value * 0.0625
         return value
         
-
-
+def alert_temp():
+    alert = Pin(9, Pin.IN)
+    alert = alert.value()
+    if alert == 1:
+        return 1
+    else:
+        return 0
