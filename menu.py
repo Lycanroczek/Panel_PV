@@ -117,26 +117,3 @@ def check_connection(selected_port, status_dot, status_label):
         status_label.config(text="Disconnected")
 
     root.after(1000, check_connection, selected_port, status_dot, status_label)
-
-port = serial.tools.list_ports.comports()
-
-root = Tk()
-root.title("PV Characteristics")
-
-port_screen = ttk.Frame(root,padding=20)
-port_screen.pack()
-
-port_screen_label = ttk.Label(port_screen,text="Choose port")
-port_screen_label.pack()
-
-port_list = ttk.Combobox(port_screen, state="readonly")
-port_list.pack()
-
-port_list["values"] = [p.device for p in port if p.vid is not None]
-port_list.select_clear()
-port_list.set("Choose port...")
-
-connect_button = ttk.Button(port_screen,text="Connect",command=connect)
-connect_button.pack()
-
-root.mainloop()

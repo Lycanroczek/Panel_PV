@@ -1,0 +1,52 @@
+// Raspberry Pi Pico 2 (RP2350) with USB CDC on GPIO 10/11
+// MicroPython board header
+
+#include "pico.h"
+
+// Platform
+#define MICROPY_PY_THREAD 0
+#define MICROPY_PY_USDBVCP 1
+
+// USB CDC Configuration
+#define PICO_DEFAULT_PIO_USB_DP_PIN       10      // D+ pin
+#define PICO_DEFAULT_PIO_USB_DM_PIN       11      // D- pin
+#define PICO_DEFAULT_PIO_USB_VBUSEN_PIN   12
+#define PICO_DEFAULT_PIO_USB_VBUSEN_STATE 1
+
+// Device endpoints for CDC
+#define CFG_TUD_CDC 1
+#define CFG_TUD_CDC_RX_BUFSIZE 256
+#define CFG_TUD_CDC_TX_BUFSIZE 256
+
+// TinyUSB device mode only
+#define CFG_TUD_ENABLED 1
+#define CFG_TUH_ENABLED 0
+
+// PIO USB support
+#define CFG_TUD_RPI_PIO_USB 1
+
+// Memory
+#define MICROPY_ALLOC_PATH_MAX      256
+#define MICROPY_ALLOC_PARSE_CHUNK_INIT 1024
+#define MICROPY_ALLOC_PARSE_CHUNK_SIZE MICROPY_ALLOC_PARSE_CHUNK_INIT
+
+// Modules
+#define MICROPY_PY_MACHINE 1
+#define MICROPY_PY_MACHINE_PWM 1
+#define MICROPY_PY_MACHINE_I2C 1
+#define MICROPY_PY_MACHINE_SPI 1
+#define MICROPY_PY_MACHINE_UART 1
+#define MICROPY_PY_MACHINE_ADC 1
+#define MICROPY_PY_MACHINE_TIMER 1
+#define MICROPY_PY_MACHINE_WDT 1
+#define MICROPY_PY_OS_DUPTERM 1
+#define MICROPY_PY_SYS_PLATFORM "rp2"
+#define MICROPY_PY_NETWORK 0
+#define MICROPY_PY_NETWORK_CYW43 0
+#define MICROPY_PY_ONEWIRE 1
+#define MICROPY_PY_SOCKET 0
+#define MICROPY_PY_SSL 0
+#define MICROPY_PY_WEBREPL 0
+
+// Pin mapping (standard Pico)
+#define MICROPY_HW_PIN_EXT_COUNT PICO_LAST_USER_PIN

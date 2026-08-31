@@ -1,0 +1,19 @@
+# Python requirements for PC-side tools
+
+# For test_pc_usb.py
+pyserial>=3.5
+
+# Optional for better testing
+colorama>=0.4.6  # Windows colored output
+
+# Optional for data analysis
+numpy>=1.20.0    # If you need signal processing
+matplotlib>=3.5.0 # For plotting U/I curves
+
+# Optional for GUI (if building PC client)
+# PyQt5>=5.15.0
+# Tkinter (usually included with Python)
+
+# Optional for documentation
+# sphinx>=4.5.0
+# sphinx-rtd-theme>=1.0.0

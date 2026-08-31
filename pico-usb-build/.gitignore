@@ -1,0 +1,54 @@
+# Git ignore for Pico USB project
+
+# Downloaded sources (large)
+sources/
+lib/
+
+# Build artifacts
+build/
+firmware/*.elf
+firmware/*.bin
+firmware/*.hex
+
+# Environment
+.env
+.env.local
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Object files
+*.o
+*.a
+*.so
+*.elf
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Build outputs
+*.uf2
+*.bin
+
+# Temporary
+*.tmp
+*.log
