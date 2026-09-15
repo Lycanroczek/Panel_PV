@@ -10,7 +10,6 @@ from expansion_card import is_connected
 from temp_sensor import temp_start, reading_temp, alert_temp
 from ADC import ADC_start, ADC_measurement_I, ADC_measurement_V
 
-global uart
 uart = UART(0, baudrate=115200, bits=8, parity=None, stop=1, tx=Pin(4), rx=Pin(6))
 
 port = serial.tools.list_ports.comports()

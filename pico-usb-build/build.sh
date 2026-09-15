@@ -19,6 +19,10 @@ INSTALL_PREFIX="$PROJECT_ROOT/.local"
 PICO_SDK_VER="2.3.0"
 TINYUSB_VER="0.21.0"
 MICROPYTHON_VER="1.29.0"
+PIO_USB_REPO="https://github.com/sekigon-gonnoc/Pico-PIO-USB.git"
+PIO_USB_COMMIT="5a37a66dc5d3fbe0ef3cdbeda923a757440f984f"
+PIO_USB_DIR="$SOURCES_DIR/Pico-PIO-USB"
+BOARD="RPI_PICO2_USB"
 
 # Kolory dla output
 RED='\033[0;31m'
@@ -101,9 +105,6 @@ stage_deps() {
         fi
     done
     
-    log_info "Sprawdzanie bibliotek Python..."
-    python3 -m pip install --quiet click
-    
     log_info "✓ Wszystkie zależności spełnione"
 }
 
@@ -121,33 +122,43 @@ stage_sources() {
     if [ ! -d "pico-sdk/.git" ]; then
         log_info "Klonowanie Pico SDK v${PICO_SDK_VER}..."
         git clone --depth=1 -b $PICO_SDK_VER https://github.com/raspberrypi/pico-sdk.git pico-sdk
-    else
-        log_info "Pico SDK już pobrany, aktualizowanie..."
-        cd pico-sdk && git pull --quiet && cd ..
     fi
     
     # TinyUSB
     if [ ! -d "tinyusb/.git" ]; then
         log_info "Klonowanie TinyUSB v${TINYUSB_VER}..."
         git clone --depth=1 -b $TINYUSB_VER https://github.com/hathach/tinyusb.git tinyusb
-    else
-        log_info "TinyUSB już pobrany, aktualizowanie..."
-        cd tinyusb && git pull --quiet && cd ..
     fi
     
     # MicroPython
     if [ ! -d "micropython/.git" ]; then
         log_info "Klonowanie MicroPython v${MICROPYTHON_VER}..."
         git clone --depth=1 -b v$MICROPYTHON_VER https://github.com/micropython/micropython.git micropython
-    else
-        log_info "MicroPython już pobrany, aktualizowanie..."
-        cd micropython && git pull --quiet && cd ..
+    fi
+
+    if [ ! -d "$PIO_USB_DIR/.git" ]; then
+        log_info "Klonowanie Pico-PIO-USB..."
+        git clone --depth=1 "$PIO_USB_REPO" "$PIO_USB_DIR"
+    fi
+    git -C "$PIO_USB_DIR" fetch --depth=1 origin "$PIO_USB_COMMIT"
+    git -C "$PIO_USB_DIR" checkout --detach "$PIO_USB_COMMIT"
+    if ! grep -q "pio_usb_tinyusb_setup_received" "$PIO_USB_DIR/src/pio_usb_device.c"; then
+        git -C "$PIO_USB_DIR" apply "$PROJECT_ROOT/patches/pico-pio-usb-tinyusb-hooks.patch"
     fi
     
     log_info "Inicjalizowanie submodułów Pico SDK..."
     cd pico-sdk
-    git submodule update --init --depth=1 > /dev/null 2>&1 || true
+    git submodule update --init --depth=1
     cd ..
+
+    mkdir -p "$SOURCES_DIR/micropython/ports/rp2/boards/$BOARD"
+    cp "$PROJECT_ROOT/boards/$BOARD"/* "$SOURCES_DIR/micropython/ports/rp2/boards/$BOARD/"
+    cd "$SOURCES_DIR/micropython/ports/rp2"
+    make BOARD="$BOARD" submodules
+    cd "$SOURCES_DIR/micropython"
+    rm -rf lib/tinyusb
+    ln -s "$SOURCES_DIR/tinyusb" lib/tinyusb
+    cd "$SOURCES_DIR"
     
     log_info "✓ Wszystkie źródła pobrane do $SOURCES_DIR"
 }
@@ -214,25 +225,26 @@ stage_build() {
     cd "$SOURCES_DIR/micropython/ports/rp2"
     
     log_info "Czyszczenie starego buildu..."
-    make clean BOARD=RPI_PICO_2 > /dev/null 2>&1 || true
+    make clean BOARD="$BOARD" > /dev/null 2>&1 || true
     
-    log_info "Kompilowanie MicroPython dla RPI_PICO_2..."
+    log_info "Kompilowanie MicroPython dla $BOARD..."
     
     # Build with custom USB module
     make -j$(nproc) \
-        BOARD=RPI_PICO_2 \
+        BOARD="$BOARD" \
         USER_C_MODULES="$MODULES_DIR/usb_device/micropython.cmake" \
         FROZEN_MANIFEST="$PROJECT_ROOT/manifest.py" \
+        CMAKE_ARGS="-DPICO_PIO_USB_PATH=$PIO_USB_DIR" \
         DEBUG=0
     
-    if [ ! -f "build-RPI_PICO_2/firmware.uf2" ]; then
+    if [ ! -f "build-$BOARD/firmware.uf2" ]; then
         log_error "Błąd kompilacji: firmware.uf2 nie znaleziony"
         return 1
     fi
     
     mkdir -p "$OUTPUT_DIR"
-    cp "build-RPI_PICO_2/firmware.uf2" "$OUTPUT_DIR/firmware_rp2350_usb.uf2"
-    cp "build-RPI_PICO_2/firmware.elf" "$OUTPUT_DIR/firmware_rp2350_usb.elf" || true
+    cp "build-$BOARD/firmware.uf2" "$OUTPUT_DIR/firmware_rp2350_usb.uf2"
+    cp "build-$BOARD/firmware.elf" "$OUTPUT_DIR/firmware_rp2350_usb.elf" || true
     
     log_info "✓ Firmware skompilowany: $OUTPUT_DIR/firmware_rp2350_usb.uf2"
     
@@ -303,7 +315,7 @@ stage_clean() {
     
     log_info "Usuwanie plików buildu..."
     rm -rf "$BUILD_DIR"
-    cd "$SOURCES_DIR/micropython/ports/rp2" && make clean BOARD=RPI_PICO_2 > /dev/null 2>&1 || true
+    cd "$SOURCES_DIR/micropython/ports/rp2" && make clean BOARD="$BOARD" > /dev/null 2>&1 || true
     
     log_info "✓ Wyczyszczono"
 }

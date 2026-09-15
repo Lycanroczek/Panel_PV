@@ -1,5 +1,9 @@
 # Arch Linux - Instrukcja Budowania Firmware
 
+> Uwaga: wskazane wersje TinyUSB 0.21.0 i Pico-PIO-USB nie tworzą kompletnego
+> CDC Device przez PIO na RP2350. Etap build służy obecnie do wykrycia tej
+> niezgodności; nie zakładaj, że wynik będzie enumerował jako `/dev/ttyACM*`.
+
 Kompletny, krok po kroku przewodnik dla Arch Linux.
 
 ## Krok 1: Przygotowanie systemu

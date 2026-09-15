@@ -5,14 +5,14 @@ Integrates RS485 module and USB service
 
 import sys
 import time
-from machine import Pin, LED
+from machine import Pin
 
 # Import modules
-from RS485 import RS485Modbus
+from RS485 import reading, sending
 from USB import USB, USBProtocol
 
 # Built-in LED
-led = Pin(25, Pin.OUT)
+led = Pin("LED", Pin.OUT)
 
 def blink_pattern(pattern, duration=0.1):
     """Blink LED with pattern (1=on, 0=off)"""
@@ -40,13 +40,7 @@ def main():
     
     # Initialize RS485 (UART0, GPIO0/1 + DE on GPIO5)
     try:
-        rs485 = RS485Modbus(
-            uart_id=0,
-            tx_pin=0,
-            rx_pin=1,
-            de_pin=5,
-            baudrate=9600
-        )
+        rs485 = True
         print("[RS485] Initialized")
         blink_pattern([1, 1, 0, 1, 1])
     except Exception as e:
@@ -92,7 +86,7 @@ def main():
             # Send command to RS485
             if rs485:
                 msg = cmd[6:].encode()
-                rs485.send(msg)
+                sending(msg)
                 return "RS485:SENT"
             return "RS485:OFFLINE"
         
@@ -135,15 +129,14 @@ def main():
             try:
                 if rs485:
                     # Check if there's data from RS485
-                    if rs485.available():
-                        data = rs485.receive()
-                        if data:
-                            # Forward to USB if connected
-                            if USB.is_connected():
-                                USB.write(b"RS485:")
-                                USB.write(data)
-                                USB.write(b"\n")
-                                print(f"[RS485->USB] {data}")
+                    data = reading()
+                    if data:
+                        # Forward to USB if connected
+                        if USB.is_connected():
+                            USB.write(b"RS485:")
+                            USB.write(data)
+                            USB.write(b"\n")
+                            print(f"[RS485->USB] {data}")
             
             except Exception as e:
                 rs485_error_count += 1
@@ -159,8 +152,6 @@ def main():
     
     finally:
         USB.deinit()
-        if rs485:
-            rs485.close()
 
 if __name__ == "__main__":
     main()

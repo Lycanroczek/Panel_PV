@@ -1,5 +1,11 @@
 # Raspberry Pi Pico 2 (RP2350) - USB CDC Device via GPIO10/11
 
+> **Status kompatybilności:** Pico-PIO-USB ma kod trybu Device, ale TinyUSB
+> 0.21.0 nie dostarcza kompletnego mostka CDC Device dla tego backendu. W tym
+> projekcie nie należy traktować `firmware.uf2` jako działającego rozwiązania
+> do enumeracji CDC, dopóki nie zostanie dodany poprawiony DCD/setup bridge.
+> Samo `CFG_TUD_RPI_PIO_USB=1` nie rozwiązuje tego problemu.
+
 Kompletny projekt firmware MicroPython z modułem USB CDC dla Raspberry Pi Pico 2 (RP2350).
 
 ## Architektura

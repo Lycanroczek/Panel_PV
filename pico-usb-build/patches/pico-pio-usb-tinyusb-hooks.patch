@@ -1,0 +1,114 @@
+diff --git a/src/pio_usb_device.c b/src/pio_usb_device.c
+index 5057152..ad7a121 100644
+--- a/src/pio_usb_device.c
++++ b/src/pio_usb_device.c
+@@ -30,6 +30,11 @@ static __unused usb_descriptor_buffers_t descriptor_buffers;
+ static uint8_t nak_encoded[5];
+ static uint8_t stall_encoded[5];
+ 
++void pio_usb_tinyusb_reset(void) __attribute__((weak));
++void pio_usb_tinyusb_setup_received(uint8_t const *setup) __attribute__((weak));
++void pio_usb_tinyusb_transfer_complete(uint8_t ep_addr, uint16_t length,
++                                       uint8_t result) __attribute__((weak));
++
+ static void __no_inline_not_in_flash_func(update_ep0_crc5_lut)(uint8_t addr) {
+   uint16_t dat;
+   uint8_t crc;
+@@ -518,57 +523,75 @@ static int __no_inline_not_in_flash_func(process_device_setup_stage)(uint8_t *bu
+ static void __no_inline_not_in_flash_func(__pio_usb_device_irq_handler)(uint8_t root_idx) {
+   root_port_t *root = PIO_USB_ROOT_PORT(root_idx);
+   usb_device_t *dev = &pio_usb_device[0];
+-
+   uint32_t const ints = root->ints;
+ 
+   if (ints & PIO_USB_INTS_RESET_END_BITS) {
+     memset(dev, 0, sizeof(*dev));
+-    for (int i = 0; i < PIO_USB_DEV_EP_CNT; i++) {
+-      dev->endpoint_id[i] = 2 * (i + 1); // only index IN endpoint
+-    }
++    for (int i = 0; i < PIO_USB_DEV_EP_CNT; i++) dev->endpoint_id[i] = 2 * (i + 1);
++    if (pio_usb_tinyusb_reset) pio_usb_tinyusb_reset();
+   }
+ 
+   if (ints & PIO_USB_INTS_SETUP_REQ_BITS) {
++#if defined(PIO_USB_USE_TINYUSB) && PIO_USB_USE_TINYUSB
++    if (pio_usb_tinyusb_setup_received) pio_usb_tinyusb_setup_received(root->setup_packet);
++#else
+     process_device_setup_stage(root->setup_packet);
++#endif
+     dev->control_pipe.stage = STAGE_DATA;
+   }
+ 
+   if (ints & PIO_USB_INTS_ENDPOINT_COMPLETE_BITS) {
+-    const uint32_t ep_all = root->ep_complete;
+-
+-    // control out
++    uint32_t const ep_all = root->ep_complete;
++    for (int b = 0; b < PIO_USB_EP_POOL_CNT; b++) {
++      if (ep_all & (1u << b) && pio_usb_tinyusb_transfer_complete) {
++        endpoint_t *ep = PIO_USB_ENDPOINT(b);
++        pio_usb_tinyusb_transfer_complete(ep->ep_num, ep->actual_len, XFER_RESULT_SUCCESS);
++      }
++    }
++#if !defined(PIO_USB_USE_TINYUSB) || !PIO_USB_USE_TINYUSB
+     if (ep_all & 0x01) {
+-      if (dev->control_pipe.stage == STAGE_STATUS) {
+-        dev->control_pipe.stage = STAGE_COMPLETE;
+-      } else if (dev->control_pipe.stage == STAGE_DATA) {
++      if (dev->control_pipe.stage == STAGE_STATUS) dev->control_pipe.stage = STAGE_COMPLETE;
++      else if (dev->control_pipe.stage == STAGE_DATA) {
+         dev->control_pipe.stage = STAGE_STATUS;
+         prepare_ep0_data(NULL, 0);
+       }
+     }
++    if (ep_all & 0x02 && dev->control_pipe.stage == STAGE_STATUS) dev->control_pipe.stage = STAGE_COMPLETE;
++#endif
++    root->ep_complete &= ~ep_all;
++  }
+ 
+-    // control in
+-    if (ep_all & 0x02) {
+-      if (dev->control_pipe.stage == STAGE_STATUS) {
+-        dev->control_pipe.stage = STAGE_COMPLETE;
++  if (ints & PIO_USB_INTS_ENDPOINT_STALLED_BITS) {
++    uint32_t const ep_all = root->ep_stalled;
++    for (int b = 0; b < PIO_USB_EP_POOL_CNT; b++) {
++      if (ep_all & (1u << b) && pio_usb_tinyusb_transfer_complete) {
++        endpoint_t *ep = PIO_USB_ENDPOINT(b);
++        pio_usb_tinyusb_transfer_complete(ep->ep_num, ep->actual_len, XFER_RESULT_STALLED);
+       }
+     }
++    root->ep_stalled &= ~ep_all;
++  }
+ 
+-    // clear all
+-    root->ep_complete &= ~ep_all;
++  if (ints & PIO_USB_INTS_ENDPOINT_ERROR_BITS) {
++    uint32_t const ep_all = root->ep_error;
++    for (int b = 0; b < PIO_USB_EP_POOL_CNT; b++) {
++      if (ep_all & (1u << b) && pio_usb_tinyusb_transfer_complete) {
++        endpoint_t *ep = PIO_USB_ENDPOINT(b);
++        pio_usb_tinyusb_transfer_complete(ep->ep_num, ep->actual_len, XFER_RESULT_FAILED);
++      }
++    }
++    root->ep_error &= ~ep_all;
+   }
+ 
+   if (ints & PIO_USB_INTS_ENDPOINT_CONTINUE_BITS) {
+     for (int b = 0; b < 16; b++) {
+-      if (root->ep_continue & (1 << b)) {
++      if (root->ep_continue & (1u << b)) {
+         endpoint_t *ep = PIO_USB_ENDPOINT((b << 1) | 0x01);
+-        uint16_t const xact_len = pio_usb_ll_get_transaction_len(ep);
+-        pio_usb_ll_transfer_continue(ep, xact_len);
+-        root->ep_continue &= ~(1 << b);
++        pio_usb_ll_transfer_continue(ep, pio_usb_ll_get_transaction_len(ep));
++        root->ep_continue &= ~(1u << b);
+       }
+     }
+   }
+-
+-  // clear all
+   root->ints &= ~ints;
+ }
+ 

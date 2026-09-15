@@ -5,14 +5,14 @@ Run this on Pico to verify USB communication
 
 import sys
 import time
-from machine import Pin, LED
+from machine import Pin
 
 # Import USB wrapper
 sys.path.insert(0, '.')
 from USB import USB, USBProtocol
 
 # LED for status
-led = Pin(25, Pin.OUT)  # Built-in LED on Pico
+led = Pin("LED", Pin.OUT)
 
 def blink(times=1, duration=0.1):
     """Blink LED"""
