@@ -1,36 +1,72 @@
 import machine
-from machine import UART, Pin
-from tkinter import *
-from tkinter import ttk
-from tkinter import messagebox
-import serial.tools.list_ports
-from tkinter import filedialog
-from menu import connect, console_write, open_main_menu, select_files, start_characteristic, check_connection
-from expansion_card import is_connected
-from temp_sensor import temp_start, reading_temp, alert_temp
 from ADC import ADC_start, ADC_measurement_I, ADC_measurement_V
+from expansion_card import is_connected
+from MCP import DAC_set, DAC_start
+from RS485 import reading, sending
+from temp_sensor import temp_start, reading_temp, alert_temp
+from time import sleep_us, sleep
 
-uart = UART(0, baudrate=115200, bits=8, parity=None, stop=1, tx=Pin(4), rx=Pin(6))
+DAC_START = 1
+DAC_END = 2681
 
-port = serial.tools.list_ports.comports()
+SETTLING_DELAY_US = 6
 
-root = Tk()
-root.title("PV Characteristics")
+temp_start()
 
-port_screen = ttk.Frame(root,padding=20)
-port_screen.pack()
+DAC_start()
 
-port_screen_label = ttk.Label(port_screen,text="Choose port")
-port_screen_label.pack()
+connected = is_connected()
 
-port_list = ttk.Combobox(port_screen, state="readonly")
-port_list.pack()
+if connected == 1:
+    number_mosfet = 4
+else:
+    number_mosfet = 2
 
-port_list["values"] = [p.device for p in port if p.vid is not None]
-port_list.select_clear()
-port_list.set("Choose port...")
+ADC_start()
 
-connect_button = ttk.Button(port_screen,text="Connect",command=connect)
-connect_button.pack()
+while True:
 
-root.mainloop()
+    command = input()
+
+    if command == "START":
+
+        for dac_value in range(DAC_START, DAC_END + 1):
+
+            # Setting DAC value
+            DAC_set(dac_value)
+
+            # Waiting for transistors
+            sleep_us(SETTLING_DELAY_US)
+
+            # getting mean of voltage
+            voltage = ADC_measurement_V()
+
+            # getting mean of current
+            current = ADC_measurement_I()
+
+            temperature = reading_temp()
+
+            data = str(voltage) + "," + str(current)
+
+            temp_data = "TEMP," + str(temperature)
+            # Sending data to PC via USB
+            print(data)
+            print(temp_data)
+
+            # Sending data via RS485
+            sending(data.encode())
+            sending(temp_data.encode())
+
+        print("FINISHED")
+        sending(b"FINISHED")
+
+        while True:
+            temperature = reading_temp()
+
+            temp_data = "TEMP," + str(temperature)
+
+            print(temp_data)
+
+            sending(temp_data.encode())
+
+            sleep(1) 
