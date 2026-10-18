@@ -8,6 +8,7 @@ from time import sleep_us, sleep
 
 DAC_START = 1
 DAC_END = 2681
+offset = 0
 
 SETTLING_DELAY_US = 6
 
@@ -39,10 +40,10 @@ while True:
             sleep_us(SETTLING_DELAY_US)
 
             # getting mean of voltage
-            voltage = ADC_measurement_V()
+            voltage = ADC_measurement_V() + offset
 
             # getting mean of current
-            current = ADC_measurement_I()
+            current = ADC_measurement_I() + offset
 
             temperature = reading_temp()
 

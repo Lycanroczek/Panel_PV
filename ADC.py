@@ -29,3 +29,15 @@ def ADC_measurement_I():
         value = value*0.0000625
         measurement_I.append(value)
     return sum(measurement_I)/len(measurement_I) #Returning mean of those samples
+
+def ADC_test():
+    measurement = []
+    ADC.writeto_mem(72,1,bytes([101,227]))
+    ADC.writeto(72,bytes([0]))
+    for i in range(8):
+        read = ADC.readfrom(72,2)
+        value = read[0] << 8
+        value = value + read[1]
+        value = value*0.0000625
+        measurement.append(value)
+    return sum(measurement)/len(measurement)
