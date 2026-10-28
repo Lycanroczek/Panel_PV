@@ -16,37 +16,20 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
-# Use the same Python interpreter that runs this GUI to launch mpremote.
-# This avoids the common Windows problem where mpremote.exe is installed,
-# but its Scripts directory is not present in PATH.
-def run_mpremote(arguments):
-    command = [sys.executable, "-m", "mpremote", *arguments]
-    return subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace"
-    )
-
-
 def connect():
     selected_port = port_list.get().strip()
 
     if not selected_port:
-        messagebox.showerror("Connection", "Select Pico port")
+        messagebox.showerror("", "Select Pico port")
         return
 
     try:
         connection = serial.Serial(selected_port, 115200, timeout=1)
     except Exception as e:
-        messagebox.showerror(
-            "Connection",
-            f"Not Connected\n\nCould not open {selected_port}:\n{e}"
-        )
+        messagebox.showerror("", f"Not Connected\n\n{e}")
         return
 
-    messagebox.showinfo("Connection", f"Connected to {selected_port}")
+    messagebox.showinfo("", "Connected")
     open_main_menu(selected_port, connection)
 
 
@@ -59,7 +42,6 @@ def console_write(console, message):
         console.see("end")
         console.config(state="disabled")
     except Exception:
-        # Avoid a secondary GUI error if the window was already closed.
         pass
 
 
@@ -79,7 +61,9 @@ def adc_test(connection, console):
         response = None
 
         while time.monotonic() < deadline:
-            line = connection.readline().decode(errors="ignore").strip()
+            line = connection.readline().decode(
+                errors="ignore"
+            ).strip()
 
             if not line:
                 continue
@@ -94,7 +78,7 @@ def adc_test(connection, console):
             messagebox.showerror(
                 "ADC Test",
                 "No valid ADC response received.\n\n"
-                "Check whether the Pico firmware handles the ADC_TEST command."
+                "Check whether the Pico handles the ADC_TEST command."
             )
             return
 
@@ -130,7 +114,10 @@ def adc_test(connection, console):
             command=result_window.destroy
         ).pack(pady=10)
 
-        console_write(console, f"ADC measured voltage: {value:.6f} V")
+        console_write(
+            console,
+            f"ADC measured voltage: {value:.6f} V"
+        )
 
     except Exception as e:
         messagebox.showerror("ADC Test Error", str(e))
@@ -145,6 +132,7 @@ def open_main_menu(selected_port, connection):
     main_screen.pack(fill="both", expand=True)
 
     # TOP BAR
+
     top_bar = ttk.Frame(main_screen)
     top_bar.pack(fill="x")
 
@@ -169,6 +157,7 @@ def open_main_menu(selected_port, connection):
     separator.pack(fill="x", pady=10)
 
     # MEASUREMENTS
+
     measurements_frame = ttk.Frame(main_screen)
     measurements_frame.pack()
 
@@ -215,6 +204,7 @@ def open_main_menu(selected_port, connection):
     temperature_value.pack()
 
     # CONSOLE
+
     console_frame = ttk.LabelFrame(
         main_screen,
         text="Console",
@@ -229,6 +219,7 @@ def open_main_menu(selected_port, connection):
     console_write(console, f"Port: {selected_port}")
 
     # BUTTONS
+
     buttons_frame = ttk.Frame(main_screen)
     buttons_frame.pack(pady=20)
 
@@ -263,6 +254,8 @@ def open_main_menu(selected_port, connection):
     )
     start_button.pack(side="left", padx=5)
 
+    # NEW ADC TEST BUTTON
+
     adc_test_button = ttk.Button(
         buttons_frame,
         text="ADC TEST",
@@ -270,7 +263,35 @@ def open_main_menu(selected_port, connection):
     )
     adc_test_button.pack(side="left", padx=5)
 
+    def poll_serial():
+        try:
+            if connection.is_open and connection.in_waiting:
+                line = connection.readline().decode(errors="ignore").strip()
+                if line:
+                    console_write(console, line)
+                    if line.startswith("TEMP,"):
+                        try:
+                            val = float(line.split(",", 1)[1])
+                            temperature_value.config(text=f"{val:.2f} °C")
+                        except ValueError:
+                            pass
+                    elif "," in line and not line.startswith("ADC_TEST"):
+                        parts = line.split(",")
+                        if len(parts) == 2:
+                            try:
+                                voltage_value.config(text=f"{float(parts[0]):.2f} V")
+                                current_value.config(text=f"{float(parts[1]):.2f} A")
+                            except ValueError:
+                                pass
+        except Exception:
+            pass
+        
+        root.after(100, poll_serial)
+
+    root.after(100, poll_serial)
+
     # CONNECTION MONITOR
+
     check_connection(selected_port, status_dot, status_label)
 
 
@@ -285,8 +306,10 @@ def check_files_on_pico(selected_port, connection, console):
         return
 
     try:
-        result = run_mpremote(
-            ["connect", selected_port, "fs", "ls"]
+        result = subprocess.run(
+            [sys.executable, "-m", "mpremote", "connect", selected_port, "fs", "ls"],
+            capture_output=True,
+            text=True
         )
 
         if result.returncode == 0:
@@ -299,25 +322,28 @@ def check_files_on_pico(selected_port, connection, console):
             else:
                 console_write(console, "Pico filesystem is empty.")
         else:
-            error = result.stderr.strip() or result.stdout.strip()
-            console_write(console, "ERROR: Could not check Pico files.")
-            console_write(console, error or "mpremote returned no error details.")
+            error = result.stderr.strip()
 
-    except Exception as e:
-        console_write(console, f"ERROR running mpremote: {e}")
+            if not error:
+                error = result.stdout.strip()
+
+            console_write(console, "ERROR: Could not check Pico files.")
+            console_write(console, error)
+
+    except FileNotFoundError:
+        console_write(console, "ERROR: mpremote not found")
         console_write(
             console,
-            "Make sure mpremote is installed for the Python running this app:"
+            "Install it with: python -m pip install mpremote"
         )
-        console_write(console, "python -m pip install mpremote")
+    except Exception as e:
+        console_write(console, f"ERROR: {e}")
 
-    finally:
-        try:
-            if not connection.is_open:
-                connection.open()
-            console_write(console, "Serial connection restored.")
-        except Exception as e:
-            console_write(console, f"ERROR reopening connection: {e}")
+    try:
+        connection.open()
+        console_write(console, "Serial connection restored.")
+    except Exception as e:
+        console_write(console, f"ERROR reopening connection: {e}")
 
 
 def select_files(selected_port, connection, console):
@@ -341,50 +367,55 @@ def select_files(selected_port, connection, console):
         console_write(console, f"ERROR closing connection: {e}")
         return
 
-    try:
-        for file_path in files:
-            file_name = os.path.basename(file_path)
-            console_write(console, f"Sending {file_name}...")
+    for file_path in files:
+        file_name = os.path.basename(file_path)
+        console_write(console, f"Sending {file_name}...")
 
-            try:
-                result = run_mpremote([
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "mpremote",
                     "connect",
                     selected_port,
                     "fs",
                     "cp",
                     file_path,
                     ":" + file_name
-                ])
+                ],
+                capture_output=True,
+                text=True
+            )
 
-                if result.returncode == 0:
-                    console_write(console, f"Sent: {file_name}")
-                    if result.stdout.strip():
-                        console_write(console, result.stdout.strip())
-                else:
-                    error = result.stderr.strip() or result.stdout.strip()
-                    console_write(console, f"ERROR: {file_name}")
-                    console_write(
-                        console,
-                        error or "mpremote returned no error details."
-                    )
+            if result.returncode == 0:
+                console_write(console, f"Sent: {file_name}")
+            else:
+                error = result.stderr.strip()
 
-            except Exception as e:
-                console_write(console, f"ERROR sending {file_name}: {e}")
-                console_write(
-                    console,
-                    "Check that mpremote is installed for this Python: "
-                    "python -m pip install mpremote"
-                )
-                break
+                if not error:
+                    error = result.stdout.strip()
 
-    finally:
-        console_write(console, "File transfer finished.")
-        try:
-            if not connection.is_open:
-                connection.open()
-            console_write(console, "Serial connection restored.")
+                console_write(console, f"ERROR: {file_name}")
+                console_write(console, error)
+
+        except FileNotFoundError:
+            console_write(console, "ERROR: mpremote not found")
+            console_write(
+                console,
+                "Install it with: python -m pip install mpremote"
+            )
+            break
         except Exception as e:
-            console_write(console, f"ERROR reopening connection: {e}")
+            console_write(console, f"ERROR: {e}")
+
+    console_write(console, "File transfer finished.")
+
+    try:
+        connection.open()
+        console_write(console, "Serial connection restored.")
+    except Exception as e:
+        console_write(console, f"ERROR reopening connection: {e}")
 
 
 def calculate_characteristic_parameters(voltages, currents):
@@ -403,6 +434,7 @@ def calculate_characteristic_parameters(voltages, currents):
     imp = currents[max_power_index]
 
     # ISC
+
     isc_index = min(
         range(len(voltages)),
         key=lambda i: abs(voltages[i])
@@ -410,6 +442,7 @@ def calculate_characteristic_parameters(voltages, currents):
     isc = currents[isc_index]
 
     # VOC
+
     voc_index = min(
         range(len(currents)),
         key=lambda i: abs(currents[i])
@@ -453,7 +486,6 @@ def save_characteristic(
         return
 
     try:
-        # utf-8-sig helps Excel on Windows recognize UTF-8 text correctly.
         with open(
             file_path,
             "w",
@@ -510,18 +542,12 @@ def start_characteristic(
     temperature_value,
     console
 ):
-    if not connection.is_open:
-        messagebox.showerror(
-            "Connection error",
-            "Pico is not connected. Reconnect before starting a measurement."
-        )
-        return
-
     characteristic_window = Toplevel(root)
     characteristic_window.title("I/V Characteristic")
     characteristic_window.geometry("1080x720")
 
     # DATA
+
     voltages = []
     currents = []
     temperatures = []
@@ -531,6 +557,7 @@ def start_characteristic(
     measurement_running = True
 
     # GRAPH
+
     graph_frame = ttk.Frame(characteristic_window, padding=10)
     graph_frame.pack(fill="both", expand=True)
 
@@ -546,6 +573,7 @@ def start_characteristic(
     canvas.get_tk_widget().pack(fill="both", expand=True)
 
     # STATUS
+
     status_label = ttk.Label(
         characteristic_window,
         text="Measuring..."
@@ -553,6 +581,7 @@ def start_characteristic(
     status_label.pack(pady=3)
 
     # PARAMETERS
+
     parameters_frame = ttk.Frame(characteristic_window)
     parameters_frame.pack(pady=3)
 
@@ -572,6 +601,7 @@ def start_characteristic(
     imp_label.grid(row=0, column=4, padx=10)
 
     # GRAPH UPDATE
+
     def update_graph():
         axis_iv.clear()
         axis_iv.plot(voltages, currents, marker=".")
@@ -583,6 +613,7 @@ def start_characteristic(
         canvas.draw()
 
     # UPDATE PARAMETERS
+
     def update_parameters():
         parameters = calculate_characteristic_parameters(
             voltages, currents
@@ -598,6 +629,7 @@ def start_characteristic(
         imp_label.config(text=f"Imp: {parameters['Imp']:.3f} A")
 
     # BUTTONS
+
     buttons_frame = ttk.Frame(characteristic_window)
     buttons_frame.pack(pady=5)
 
@@ -609,7 +641,9 @@ def start_characteristic(
             currents,
             temperatures,
             measurement_time,
-            calculate_characteristic_parameters(voltages, currents),
+            calculate_characteristic_parameters(
+                voltages, currents
+            ),
             console
         )
     )
@@ -653,9 +687,13 @@ def start_characteristic(
     )
     back_button.pack(side="left", padx=5)
 
-    characteristic_window.protocol("WM_DELETE_WINDOW", close_window)
+    characteristic_window.protocol(
+        "WM_DELETE_WINDOW",
+        close_window
+    )
 
     # START MEASUREMENT
+
     try:
         connection.reset_input_buffer()
         connection.write(b"START\n")
@@ -666,6 +704,7 @@ def start_characteristic(
         return
 
     # READ DATA
+
     def read_data():
         nonlocal current_temperature
         nonlocal measurement_running
@@ -678,7 +717,9 @@ def start_characteristic(
 
         while connection.in_waiting:
             try:
-                line = connection.readline().decode(errors="ignore").strip()
+                line = connection.readline().decode(
+                    errors="ignore"
+                ).strip()
             except Exception as e:
                 console_write(console, f"ERROR reading serial data: {e}")
                 continue
@@ -689,9 +730,12 @@ def start_characteristic(
             console_write(console, line)
 
             # TEMPERATURE
+
             if line.startswith("TEMP,"):
                 try:
-                    current_temperature = float(line.split(",", 1)[1])
+                    current_temperature = float(
+                        line.split(",", 1)[1]
+                    )
                     temperature_value.config(
                         text=f"{current_temperature:.2f} °C"
                     )
@@ -700,9 +744,11 @@ def start_characteristic(
                         console,
                         f"ERROR: Invalid temperature data: {line}"
                     )
+
                 continue
 
             # FINISHED
+
             if line == "FINISHED":
                 measurement_running = False
                 status_label.config(text="Characteristic finished")
@@ -710,22 +756,30 @@ def start_characteristic(
                 continue
 
             # ERROR FROM PICO
+
             if line.startswith("ERROR"):
                 console_write(console, f"Pico error: {line}")
                 continue
 
             # VOLTAGE,CURRENT
+
             parts = line.split(",")
 
             if len(parts) != 2:
-                console_write(console, f"Invalid data ignored: {line}")
+                console_write(
+                    console,
+                    f"Invalid data ignored: {line}"
+                )
                 continue
 
             try:
                 voltage = float(parts[0])
                 current = float(parts[1])
             except ValueError:
-                console_write(console, f"Invalid numeric data ignored: {line}")
+                console_write(
+                    console,
+                    f"Invalid numeric data ignored: {line}"
+                )
                 continue
 
             voltages.append(voltage)
@@ -768,14 +822,10 @@ def refresh_ports():
     ports = serial.tools.list_ports.comports()
     pico_ports = []
 
-    # Prefer the known Raspberry Pi USB VID/PID.
     for port in ports:
         if port.vid == 0x2E8A and port.pid == 0x0005:
             pico_ports.append(port.device)
 
-    # On some Windows driver/firmware combinations the VID/PID may not be
-    # reported as expected. In that case show available ports so the user
-    # can select the Pico COM port manually instead of seeing an empty list.
     if pico_ports:
         available_ports = pico_ports
         select_first = True
@@ -792,6 +842,7 @@ def refresh_ports():
 
 
 # MAIN WINDOW
+
 root = Tk()
 root.title("PV Characteristics")
 root.geometry("500x250")
@@ -824,4 +875,5 @@ connect_button = ttk.Button(
 connect_button.pack(pady=10)
 
 refresh_ports()
+
 root.mainloop()
