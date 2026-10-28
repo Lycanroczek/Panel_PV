@@ -1,7 +1,7 @@
-from machine import Pin, I2C
+from machine import Pin, SoftI2C
 def ADC_start():
     global ADC
-    ADC = I2C(1, scl=Pin(19), sda=Pin(20), freq=100000)
+    ADC = SoftI2C(1, scl=Pin(19), sda=Pin(20), freq=100000)
     ADC.scan()
     ADC.writeto_mem(72,1,bytes([69,227])) #Loading configuration
     ADC.writeto(72,bytes([0])) #Changing from settings to measurements

@@ -1,9 +1,9 @@
 import machine
-from machine import time, Pin, I2C
+from machine import Pin, SoftI2C
 
 def temp_start():
     global temp
-    temp = I2C(0, scl=Pin(7), sda=Pin(8),freq=100000)
+    temp = SoftI2C(scl=Pin(9), sda=Pin(8), freq=100000)
     temp.scan()
     temp.writeto_mem(73,1,bytes([100,176])) #Configurating temperature sensor work after restart
     temp.writeto_mem(73,3,bytes([6,64])) #Configurating THIGH 100C
@@ -27,8 +27,4 @@ def reading_temp():
         
 def alert_temp():
     alert = Pin(9, Pin.IN) #Reading alert pin from sensor
-    alert = alert.value() 
-    if alert == 1: 
-        return 1 #Alert is active
-    else:
-        return 0 #Alert is not active
+    return 1 if alert.value() == 1 else 0

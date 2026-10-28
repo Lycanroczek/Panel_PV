@@ -7,6 +7,7 @@ import serial
 import serial.tools.list_ports
 import subprocess
 import os
+import sys
 import csv
 import time
 from datetime import datetime
@@ -33,10 +34,15 @@ def connect():
 
 
 def console_write(console, message):
-    console.config(state="normal")
-    console.insert("end", message + "\n")
-    console.see("end")
-    console.config(state="disabled")
+    try:
+        if not console.winfo_exists():
+            return
+        console.config(state="normal")
+        console.insert("end", str(message) + "\n")
+        console.see("end")
+        console.config(state="disabled")
+    except Exception:
+        pass
 
 
 def adc_test(connection, console):
@@ -256,6 +262,33 @@ def open_main_menu(selected_port, connection):
         command=lambda: adc_test(connection, console)
     )
     adc_test_button.pack(side="left", padx=5)
+
+    def poll_serial():
+        try:
+            if connection.is_open and connection.in_waiting:
+                line = connection.readline().decode(errors="ignore").strip()
+                if line:
+                    console_write(console, line)
+                    if line.startswith("TEMP,"):
+                        try:
+                            val = float(line.split(",", 1)[1])
+                            temperature_value.config(text=f"{val:.2f} °C")
+                        except ValueError:
+                            pass
+                    elif "," in line and not line.startswith("ADC_TEST"):
+                        parts = line.split(",")
+                        if len(parts) == 2:
+                            try:
+                                voltage_value.config(text=f"{float(parts[0]):.2f} V")
+                                current_value.config(text=f"{float(parts[1]):.2f} A")
+                            except ValueError:
+                                pass
+        except Exception:
+            pass
+        
+        root.after(100, poll_serial)
+
+    root.after(100, poll_serial)
 
     # CONNECTION MONITOR
 
@@ -788,7 +821,11 @@ def refresh_ports():
     pico_ports = []
 
     for port in ports:
-        if port.vid == 0x2E8A and port.pid == 0x0005:
+        if port.device.startswith("/dev/ttyACM") or port.device.startswith("/dev/ttyUSB"):
+            pico_ports.append(port.device)
+
+    if not pico_ports:
+        for port in ports:
             pico_ports.append(port.device)
 
     port_list["values"] = pico_ports

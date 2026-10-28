@@ -1,5 +1,7 @@
 from machine import ADC
+
 expansion = ADC(0)
+
 def is_connected():
     value = expansion.read_u16()
     voltage = value * 3.3 / (65535)

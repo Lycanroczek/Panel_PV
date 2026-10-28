@@ -1,5 +1,7 @@
 import machine
-from ADC import ADC_start, ADC_measurement_I, ADC_measurement_V
+import sys
+import select
+from ADC import ADC_start, ADC_measurement_I, ADC_measurement_V, ADC_test
 from expansion_card import is_connected
 from MCP import DAC_set, DAC_start
 from RS485 import reading, sending
@@ -13,61 +15,71 @@ offset = 0
 SETTLING_DELAY_US = 6
 
 temp_start()
-
 DAC_start()
+try:
+    ADC_start()
+except Exception:
+    pass
 
 connected = is_connected()
-
 if connected == 1:
-    number_mosfet = 4
+    DAC_END = DAC_END
 else:
-    number_mosfet = 2
+    DAC_END = DAC_END/2
 
-ADC_start()
+def check_stdin():
+    if select.select([sys.stdin], [], [], 0)[0]:
+        return sys.stdin.readline().strip()
+    return None
 
 while True:
+    cmd = check_stdin()
 
-    command = input()
+    if cmd == "ADC_TEST":
+        try:
+            val = ADC_test()
+            print(f"ADC_TEST,{val}")
+        except Exception as e:
+            print(f"ERROR,ADC: {e}")
 
-    if command == "START":
-
+    elif cmd == "START":
         for dac_value in range(DAC_START, DAC_END + 1):
-
-            # Setting DAC value
+            sub_cmd = check_stdin()
+            if sub_cmd == "STOP":
+                DAC_set(0)
+                break
+            
             DAC_set(dac_value)
-
-            # Waiting for transistors
             sleep_us(SETTLING_DELAY_US)
 
-            # getting mean of voltage
-            voltage = ADC_measurement_V() + offset
-
-            # getting mean of current
-            current = ADC_measurement_I() + offset
+            try:
+                voltage = ADC_measurement_V() + offset
+                current = ADC_measurement_I() + offset
+            except Exception:
+                voltage, current = 0.0, 0.0
 
             temperature = reading_temp()
 
-            data = str(voltage) + "," + str(current)
-
-            temp_data = "TEMP," + str(temperature)
-            # Sending data to PC via USB
+            data = f"{voltage},{current}"
+            temp_data = f"TEMP,{temperature}"
+            
             print(data)
             print(temp_data)
 
-            # Sending data via RS485
             sending(data.encode())
             sending(temp_data.encode())
 
         print("FINISHED")
         sending(b"FINISHED")
 
-        while True:
+    else:
+        # Stan spoczynku - działa od razu po odpaleniu Pico, bez czekania na START
+        try:
             temperature = reading_temp()
-
-            temp_data = "TEMP," + str(temperature)
-
+            temp_data = f"TEMP,{temperature}"
             print(temp_data)
-
             sending(temp_data.encode())
+        except Exception:
+            pass
 
-            sleep(1) 
+        sleep(1)
